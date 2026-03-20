@@ -27,6 +27,15 @@ def parse_url(url):
 
     return port, host, path
 
+import urllib.parse
+
+def extract_real_url(url):
+    if "uddg=" in url:
+        parsed = urllib.parse.urlparse(url)
+        params = urllib.parse.parse_qs(parsed.query)
+        return urllib.parse.unquote(params["uddg"][0])
+    return url
+
 def make_request(url):
     port, host, path = parse_url(url)
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -103,10 +112,19 @@ if __name__ == "__main__":
             print(f"   {url}")
             print()
 
-        # print("Enter a number to fetch a result (0 to exit): ", end="")
-        # choice = input().strip()
-        # if choice > 0 and choice <= 10:
-
+        print("Enter a number to fetch a result (0 to exit): ", end="")
+        choice = int(input().strip())
+        if choice > 0 and choice <= 10:
+            selected_url = results[choice - 1].get("href")
+            print(selected_url)
+            if selected_url.startswith("//"):
+                selected_url = "https:" + selected_url
+            selected_url = extract_real_url(selected_url)  # add this
+            print(f"Fetching: {selected_url}")
+            headers, body = make_request(selected_url)
+            body = re.sub(r'^[0-9a-fA-F]+\r?\n', '', body, flags=re.MULTILINE)
+            soup = BeautifulSoup(body, "html.parser")
+            print(soup.get_text(separator="\n", strip=True))
 
     else:
         print("Unknown flag. Use go2web -h for help")
