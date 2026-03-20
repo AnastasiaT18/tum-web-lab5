@@ -5,7 +5,6 @@ import sys
 import ssl
 
 
-
 host = "example.com"
 port = 80
 
@@ -27,7 +26,6 @@ def parse_url(url):
         path = "/"
 
     return port, host, path
-    
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -115,6 +113,8 @@ if __name__ == "__main__":
         for i, result in enumerate(results, 1):
             title = result.get_text(strip=True)
             url = result.get("href")
+            if url.startswith("//"):
+                url = "https:" + url
             print(f"{i}. {title}")
             print(f"   {url}")
             print()
