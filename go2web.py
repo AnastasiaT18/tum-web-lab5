@@ -33,26 +33,28 @@ def check_cache(url):
     key = get_cache_key(url)
     path = f"cache/{key}"
     if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
+        with open(path, "rb") as f:  # binary mode
+            content = f.read().decode("utf-8")
+            return content.split("\r\n\r\n", 1)
     return None
 
-def save_to_cache(url, body):
+
+def save_to_cache(url, headers, body):
     os.makedirs("cache", exist_ok=True)
     key = get_cache_key(url)
     path = f"cache/{key}"
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(body)
+    with open(path, "wb") as f:  # binary mode
+        f.write((headers + "\r\n\r\n" + body).encode("utf-8"))
 
 def make_request(url):
 
     ##first check the cache, then save if not there
     cached = check_cache(url)
     if cached is not None:
-        print("Getting from cache...")
-        return cached
+        # print("Getting from cache...")
+        return cached[0], cached[1]
 
-    print("Getting from web...")
+    # print("Getting from web...")
     port, host, path = parse_url(url)
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host, port))
@@ -81,7 +83,7 @@ def make_request(url):
     s.close()
     headers, body = response.decode().split("\r\n\r\n", 1)
     headers, body = handle_redirection(headers, body)
-    save_to_cache(url, body)
+    save_to_cache(url, headers, body)
 
     return headers, body
 
@@ -119,7 +121,6 @@ def get_content_type(headers):
 def display(headers, body):
     body = re.sub(r'^[0-9a-fA-F]+\r?\n', '', body, flags=re.MULTILINE)
     content_type = get_content_type(headers)
-    print(content_type)
 
     if content_type and "application/json" in content_type:
         parsed = json.loads(body)
@@ -131,6 +132,7 @@ def display(headers, body):
             
 
 if __name__ == "__main__":
+
     if len(sys.argv) < 2:
         print("Usage: go2web -h for help")
         sys.exit(1)
