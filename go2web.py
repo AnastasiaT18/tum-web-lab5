@@ -59,7 +59,7 @@ def make_request(url):
 def handle_redirection(headers, body):
 
     # handle 301/302
-    if get_status(headers) == 301 or get_status(headers) == 302:
+    if get_status(headers) in (301, 302, 303, 307, 308):
         # print("Redirection detected, following...")
         headers_lines = headers.split("\r\n")
         for line in headers_lines:
