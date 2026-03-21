@@ -3,6 +3,8 @@ from bs4 import BeautifulSoup
 import re
 import sys
 import ssl
+import os
+import hashlib
 
 
 def parse_url(url):
@@ -24,7 +26,33 @@ def parse_url(url):
 
     return port, host, path
 
+def get_cache_key(url):
+    return hashlib.md5(url.encode()).hexdigest()
+
+def check_cache(url):
+    key = get_cache_key(url)
+    path = f"cache/{key}"
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return None
+
+def save_to_cache(url, body):
+    os.makedirs("cache", exist_ok=True)
+    key = get_cache_key(url)
+    path = f"cache/{key}"
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(body)
+
 def make_request(url):
+
+    ##first check the cache, then save if not there
+    cached = check_cache(url)
+    if cached is not None:
+        print("Getting from cache...")
+        return cached
+
+    print("Getting from web...")
     port, host, path = parse_url(url)
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host, port))
@@ -52,9 +80,11 @@ def make_request(url):
         
     s.close()
     headers, body = response.decode().split("\r\n\r\n", 1)
-    headers, body = handle_redirection(headers, body)
+    body = handle_redirection(headers, body)
 
-    return headers, body
+    save_to_cache(url, body)
+
+    return body
 
 def handle_redirection(headers, body):
 
@@ -76,9 +106,8 @@ def handle_redirection(headers, body):
             new_url = content.split("URL=")[-1].strip('"\'')
             # print("JS redirect detected, following...")
         return make_request(new_url)
-    return headers, body
+    return body
     
-
 def get_status(headers):
     first_line = headers.split("\r\n")[0]
     return int(first_line.split(" ")[1])
@@ -100,7 +129,7 @@ if __name__ == "__main__":
             print("Error:  -u requires a URL")
             sys.exit(1)
         url = sys.argv[2]
-        headers, body = make_request(url)
+        body = make_request(url)
 
         body = re.sub(r'^[0-9a-fA-F]+\r?\n', '', body, flags=re.MULTILINE)
         soup = BeautifulSoup(body, "html.parser")
@@ -111,10 +140,9 @@ if __name__ == "__main__":
             print("Error:  -s requires a search term")
             sys.exit(1)
         search_term = " ".join(sys.argv[2:])
-        print(search_term)
 
         url = f"https://html.duckduckgo.com/html/?q={search_term.replace(' ', '+')}"
-        headers, body = make_request(url)
+        body = make_request(url)
         
         body = re.sub(r'^[0-9a-fA-F]+\r?\n', '', body, flags=re.MULTILINE)
         soup = BeautifulSoup(body, "html.parser")
@@ -138,11 +166,7 @@ if __name__ == "__main__":
                 selected_url = "https:" + selected_url
 
             print(f"Fetching: {selected_url}")
-            headers, body = make_request(selected_url)
-
-            print(headers.split("\r\n")[0])
-            print(f"Body length: {len(body)}")
-            print(body[:500])       
+            body = make_request(selected_url)    
 
             body = re.sub(r'^[0-9a-fA-F]+\r?\n', '', body, flags=re.MULTILINE)
             soup = BeautifulSoup(body, "html.parser")
