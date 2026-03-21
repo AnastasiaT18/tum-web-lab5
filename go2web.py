@@ -5,9 +5,6 @@ import sys
 import ssl
 
 
-host = "example.com"
-port = 80
-
 def parse_url(url):
     scheme = url.split("://")[0]
     if scheme == "http":
@@ -26,15 +23,6 @@ def parse_url(url):
         path = "/"
 
     return port, host, path
-
-import urllib.parse
-
-def extract_real_url(url):
-    if "uddg=" in url:
-        parsed = urllib.parse.urlparse(url)
-        params = urllib.parse.parse_qs(parsed.query)
-        return urllib.parse.unquote(params["uddg"][0])
-    return url
 
 def make_request(url):
     port, host, path = parse_url(url)
@@ -64,8 +52,37 @@ def make_request(url):
         
     s.close()
     headers, body = response.decode().split("\r\n\r\n", 1)
+    headers, body = handle_redirection(headers, body)
+
     return headers, body
 
+def handle_redirection(headers, body):
+
+    # handle 301/302
+    if get_status(headers) in (301, 302, 303, 307, 308):
+        # print("Redirection detected, following...")
+        headers_lines = headers.split("\r\n")
+        for line in headers_lines:
+            if line.lower().startswith("location:"):
+                new_url = line.split(": ", 1)[1].strip()
+        return make_request(new_url)
+
+    # handle JS/meta redirects
+    if 'window.parent.location.replace' in body or "http-equiv='refresh'" in body.lower():
+        soup_redirect = BeautifulSoup(body, "html.parser")
+        meta = soup_redirect.find("meta", attrs={"http-equiv": lambda x: x and x.lower() == "refresh"})
+        if meta:
+            content = meta.get("content", "")
+            new_url = content.split("URL=")[-1].strip('"\'')
+            # print("JS redirect detected, following...")
+        return make_request(new_url)
+    return headers, body
+    
+
+def get_status(headers):
+    first_line = headers.split("\r\n")[0]
+    return int(first_line.split(" ")[1])
+     
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -119,9 +136,14 @@ if __name__ == "__main__":
             print(selected_url)
             if selected_url.startswith("//"):
                 selected_url = "https:" + selected_url
-            selected_url = extract_real_url(selected_url)  # add this
+
             print(f"Fetching: {selected_url}")
             headers, body = make_request(selected_url)
+
+            print(headers.split("\r\n")[0])
+            print(f"Body length: {len(body)}")
+            print(body[:500])       
+
             body = re.sub(r'^[0-9a-fA-F]+\r?\n', '', body, flags=re.MULTILINE)
             soup = BeautifulSoup(body, "html.parser")
             print(soup.get_text(separator="\n", strip=True))
