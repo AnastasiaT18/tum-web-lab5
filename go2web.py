@@ -51,10 +51,10 @@ def make_request(url):
     ##first check the cache, then save if not there
     cached = check_cache(url)
     if cached is not None:
-        # print("Getting from cache...")
+        print("Getting from cache...")
         return cached[0], cached[1]
 
-    # print("Getting from web...")
+    print("Getting from web...")
     port, host, path = parse_url(url)
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((host, port))
@@ -91,7 +91,7 @@ def handle_redirection(headers, body):
 
     # handle 301/302
     if get_status(headers) in (301, 302, 303, 307, 308):
-        # print("Redirection detected, following...")
+        print("Redirection detected, following...")
         headers_lines = headers.split("\r\n")
         for line in headers_lines:
             if line.lower().startswith("location:"):
@@ -105,7 +105,7 @@ def handle_redirection(headers, body):
         if meta:
             content = meta.get("content", "")
             new_url = content.split("URL=")[-1].strip('"\'')
-            # print("JS redirect detected, following...")
+            print("JS redirect detected, following...")
         return make_request(new_url)
     return headers, body
     
@@ -159,6 +159,10 @@ if __name__ == "__main__":
 
         url = f"https://html.duckduckgo.com/html/?q={search_term.replace(' ', '+')}"
         headers, body = make_request(url)
+
+        if get_status(headers) != 200:
+            print(f"Search failed with status {get_status(headers)}, try again.")
+            sys.exit(1)
         
         body = re.sub(r'^[0-9a-fA-F]+\r?\n', '', body, flags=re.MULTILINE)
         soup = BeautifulSoup(body, "html.parser")
