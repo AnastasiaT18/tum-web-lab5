@@ -46,7 +46,13 @@ def save_to_cache(url, headers, body):
     with open(path, "wb") as f:  # binary mode
         f.write((headers + "\r\n\r\n" + body).encode("utf-8"))
 
-def make_request(url):
+def make_request(url, redirect_count=0):
+
+    MAX_REDIRECTS = 2
+
+    if redirect_count > MAX_REDIRECTS:
+        print("Error: too many redirects")
+        sys.exit(1)
 
     ##first check the cache, then save if not there
     cached = check_cache(url)
@@ -82,12 +88,12 @@ def make_request(url):
         
     s.close()
     headers, body = response.decode().split("\r\n\r\n", 1)
-    headers, body = handle_redirection(headers, body)
+    headers, body = handle_redirection(headers, body, redirect_count)
     save_to_cache(url, headers, body)
 
     return headers, body
 
-def handle_redirection(headers, body):
+def handle_redirection(headers, body, redirect_count):
 
     # handle 301/302
     if get_status(headers) in (301, 302, 303, 307, 308):
@@ -96,7 +102,7 @@ def handle_redirection(headers, body):
         for line in headers_lines:
             if line.lower().startswith("location:"):
                 new_url = line.split(": ", 1)[1].strip()
-        return make_request(new_url)
+        return make_request(new_url, redirect_count + 1)
 
     # handle JS/meta redirects
     if 'window.parent.location.replace' in body or "http-equiv='refresh'" in body.lower():
@@ -106,7 +112,7 @@ def handle_redirection(headers, body):
             content = meta.get("content", "")
             new_url = content.split("URL=")[-1].strip('"\'')
             print("JS redirect detected, following...")
-        return make_request(new_url)
+        return make_request(new_url, redirect_count + 1)
     return headers, body
     
 def get_status(headers):
